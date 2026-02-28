@@ -10,7 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Settings, Maximize2, Minimize2 } from 'lucide-react';
 import { Z_LAYERS } from '@/lib/layout-constants';
 import { sendMessageWithWindowOpenAI } from '@/lib/windowOpenAI';
-import { getConsciousnessState, saveConversationTurn } from '@/lib/cloudModules';
+import {
+  getConsciousnessState,
+  saveConversationTurn,
+  subscribeMemorySyncStatus,
+  type MemorySyncStatus,
+} from '@/lib/cloudModules';
 
 // Unified state interfaces
 interface MainzaState {
@@ -74,12 +79,14 @@ const MainzaInterface: React.FC = () => {
   });
 
   const [error, setError] = useState<string | null>(null);
+  const [memorySyncStatus, setMemorySyncStatus] = useState<MemorySyncStatus>({ pending: 0, syncing: false, lastError: null });
   const orbRef = useRef<HTMLDivElement>(null);
   const crystalRefs = useRef<{ [id: number]: HTMLDivElement | null }>({});
 
-  const storeInteractionInCloudMemory = useCallback(async (userMessage: string, assistantMessage: string) => {
+  const storeInteractionInCloudMemory = useCallback(async (turnId: string, userMessage: string, assistantMessage: string) => {
     try {
       await saveConversationTurn(
+        turnId,
         userMessage,
         assistantMessage,
         undefined,
@@ -134,7 +141,7 @@ const MainzaInterface: React.FC = () => {
       };
 
       setMessages(prev => [...prev, aiMessage]);
-      await storeInteractionInCloudMemory(message, data.response);
+      await storeInteractionInCloudMemory(userMessage.id, message, data.response);
       setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
     } catch (err) {
       setError('Failed to get AI response');
@@ -158,6 +165,11 @@ const MainzaInterface: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchConsciousnessState]);
 
+
+  useEffect(() => {
+    const unsubscribe = subscribeMemorySyncStatus(setMemorySyncStatus);
+    return unsubscribe;
+  }, []);
 
   // Clear error after 5 seconds
   useEffect(() => {
@@ -230,6 +242,15 @@ const MainzaInterface: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2">
+            <div className="hidden md:flex items-center px-2 py-1 rounded bg-slate-800/40 text-xs">
+              <span className={memorySyncStatus.lastError ? 'text-red-300' : memorySyncStatus.syncing ? 'text-yellow-300' : 'text-emerald-300'}>
+                {memorySyncStatus.lastError
+                  ? 'Memory sync error'
+                  : memorySyncStatus.syncing
+                    ? `Syncing memory (${memorySyncStatus.pending})`
+                    : 'Memory synced'}
+              </span>
+            </div>
             <Button
               onClick={toggleListening}
               variant={uiState.isListening ? "default" : "outline"}

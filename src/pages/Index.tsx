@@ -23,6 +23,8 @@ import {
   getNeedsSuggestions,
   getNeo4jStatistics,
   saveConversationTurn,
+  subscribeMemorySyncStatus,
+  type MemorySyncStatus,
 } from '@/lib/cloudModules';
 import {
   Mic, MicOff, Settings, Brain, Activity, Zap, Eye,
@@ -142,6 +144,7 @@ function Index() {
   const [selectedModel, setSelectedModel] = useState<string>('default');
   const [loadedModel, setLoadedModel] = useState<string>('default');
   const [previousModel, setPreviousModel] = useState<string | null>(null);
+  const [memorySyncStatus, setMemorySyncStatus] = useState<MemorySyncStatus>({ pending: 0, syncing: false, lastError: null });
 
   // Model loading function
   const handleModelLoad = async (model: string): Promise<boolean> => {
@@ -286,23 +289,16 @@ function Index() {
     setMessages(prev => [...prev, newMessage]);
   };
 
-  const storeInteractionInCloudMemory = useCallback(async (userMessage: string, assistantMessage: string) => {
+  const storeInteractionInCloudMemory = useCallback(async (turnId: string, userMessage: string, assistantMessage: string) => {
     try {
-      await persistConversationMemory({
-        content: `User: ${userMessage}\nAssistant: ${assistantMessage}`,
-        memory_type: 'conversation',
-        user_id: 'mainza-user',
-        agent_name: 'window.openai',
-        consciousness_context: {
-          consciousness_level: mainzaState.consciousness_level,
-          emotional_state: mainzaState.emotional_state,
-        },
-        metadata: {
-          source: 'window.openai',
-          selected_model: loadedModel,
-          timestamp: new Date().toISOString(),
-        },
-      });
+      await saveConversationTurn(
+        turnId,
+        userMessage,
+        assistantMessage,
+        loadedModel,
+        mainzaState.consciousness_level,
+        mainzaState.emotional_state,
+      );
     } catch (error) {
       console.warn('Cloud memory persistence failed:', error);
     }
@@ -334,7 +330,7 @@ function Index() {
 
       setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
       addMainzaMessage(bridgedData.response, bridgedData.agent_used);
-      await storeInteractionInCloudMemory(message, bridgedData.response);
+      await storeInteractionInCloudMemory(userMessage.id, message, bridgedData.response);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
       setError(`Failed to get response: ${errorMessage}`);
@@ -413,6 +409,12 @@ function Index() {
       console.error('TTS failed:', e);
     }
   };
+
+
+  useEffect(() => {
+    const unsubscribe = subscribeMemorySyncStatus(setMemorySyncStatus);
+    return unsubscribe;
+  }, []);
 
   // Initialize app
   useEffect(() => {
@@ -572,7 +574,16 @@ function Index() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2"> 
+            <div className="hidden md:flex items-center px-2 py-1 rounded bg-slate-800/40 text-xs">
+              <span className={memorySyncStatus.lastError ? 'text-red-300' : memorySyncStatus.syncing ? 'text-yellow-300' : 'text-emerald-300'}>
+                {memorySyncStatus.lastError
+                  ? 'Memory sync error'
+                  : memorySyncStatus.syncing
+                    ? `Syncing memory (${memorySyncStatus.pending})`
+                    : 'Memory synced'}
+              </span>
+            </div>
             <DarkButton
               onClick={handleVoiceInput}
               variant="outline"

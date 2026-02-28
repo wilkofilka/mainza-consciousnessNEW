@@ -75,17 +75,24 @@ export interface CloudMemoryPayload {
   metadata?: Record<string, unknown>;
 }
 
-export const persistConversationMemory = async (payload: CloudMemoryPayload): Promise<void> => {
-  await fetchWithRetry(
+export const persistConversationMemory = async (
+  payload: CloudMemoryPayload,
+  idempotencyKey: string,
+): Promise<void> => {
+  const response = await fetchWithRetry(
     '/api/memory-system/memories/create',
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': `${payload.user_id}-${Date.now()}-${payload.agent_name}`,
+        'X-Idempotency-Key': idempotencyKey,
       },
       body: JSON.stringify(payload),
     },
     { retries: 2, timeoutMs: 9000, retryDelayMs: 500 },
   );
+
+  if (!response.ok) {
+    throw new Error(`Cloud memory write failed with status ${response.status}`);
+  }
 };
