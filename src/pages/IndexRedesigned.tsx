@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Settings, Maximize2, Minimize2 } from 'lucide-react';
 import { Z_LAYERS } from '@/lib/layout-constants';
 import { sendMessageWithWindowOpenAI } from '@/lib/windowOpenAI';
-import { fetchJsonWithRetry, persistConversationMemory } from '@/lib/cloudApi';
+import { getConsciousnessState, saveConversationTurn } from '@/lib/cloudModules';
 
 // Unified state interfaces
 interface MainzaState {
@@ -79,20 +79,13 @@ const MainzaInterface: React.FC = () => {
 
   const storeInteractionInCloudMemory = useCallback(async (userMessage: string, assistantMessage: string) => {
     try {
-      await persistConversationMemory({
-        content: `User: ${userMessage}\nAssistant: ${assistantMessage}`,
-        memory_type: 'conversation',
-        user_id: 'mainza-user',
-        agent_name: 'window.openai',
-        consciousness_context: {
-          consciousness_level: mainzaState.consciousness_level,
-          emotional_state: mainzaState.emotional_state,
-        },
-        metadata: {
-          source: 'window.openai',
-          timestamp: new Date().toISOString(),
-        },
-      });
+      await saveConversationTurn(
+        userMessage,
+        assistantMessage,
+        undefined,
+        mainzaState.consciousness_level,
+        mainzaState.emotional_state,
+      );
     } catch (error) {
       console.warn('Cloud memory persistence failed:', error);
     }
@@ -101,7 +94,7 @@ const MainzaInterface: React.FC = () => {
   // Consciousness state fetching
   const fetchConsciousnessState = useCallback(async () => {
     try {
-      const data = await fetchJsonWithRetry<any>('/consciousness/state', undefined, { timeoutMs: 7000 });
+      const data = await getConsciousnessState();
       if (data.status === 'success') {
           setMainzaState(prev => ({
             ...prev,

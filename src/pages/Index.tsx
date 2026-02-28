@@ -17,7 +17,13 @@ import { MetricDisplay } from '@/components/ui/metric-display';
 import { Button } from '@/components/ui/button';
 import { DarkButton } from '@/components/ui/dark-button';
 import { assertWindowOpenAIAvailable, sendMessageWithWindowOpenAI } from '@/lib/windowOpenAI';
-import { fetchJsonWithRetry, persistConversationMemory } from '@/lib/cloudApi';
+import {
+  getConsciousnessState,
+  getKnowledgeGraphStats,
+  getNeedsSuggestions,
+  getNeo4jStatistics,
+  saveConversationTurn,
+} from '@/lib/cloudModules';
 import {
   Mic, MicOff, Settings, Brain, Activity, Zap, Eye,
   MessageSquare, BarChart3, Cpu, Heart, Target, Send, Volume2
@@ -166,7 +172,7 @@ function Index() {
   // Fetch consciousness state
   const fetchConsciousnessState = useCallback(async () => {
     try {
-      const data = await fetchJsonWithRetry<any>('/consciousness/state', undefined, { timeoutMs: 7000 });
+      const data = await getConsciousnessState();
       if (data.consciousness_state) {
           const consciousnessLevel = data.consciousness_state.consciousness_level || 0.7;
           const emotionalState = data.consciousness_state.emotional_state || 'curious';
@@ -193,7 +199,7 @@ function Index() {
   const fetchKnowledgeGraphStats = useCallback(async () => {
     try {
       // Use the dedicated knowledge graph stats endpoint
-      const stats = await fetchJsonWithRetry<any>('/consciousness/knowledge-graph-stats', undefined, { timeoutMs: 7000 });
+      const stats = await getKnowledgeGraphStats();
       if (stats && typeof stats === 'object') {
         console.log('📊 Knowledge graph stats received:', stats);
         setKnowledgeGraphStats(stats);
@@ -201,7 +207,7 @@ function Index() {
       }
 
       // Fallback: Try Neo4j statistics endpoint
-      const neo4jData = await fetchJsonWithRetry<any>('/api/insights/neo4j/statistics', undefined, { timeoutMs: 7000 });
+      const neo4jData = await getNeo4jStatistics();
       if (neo4jData && typeof neo4jData === 'object') {
         console.log('📊 Neo4j statistics received:', neo4jData);
         setKnowledgeGraphStats({
@@ -235,15 +241,7 @@ function Index() {
   // Fetch needs and suggestions
   const fetchNeedsAndSuggestions = useCallback(async () => {
     try {
-      const data = await fetchJsonWithRetry<any>(
-        '/recommendations/needs_and_suggestions',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: 'mainza-user' })
-        },
-        { timeoutMs: 8000 },
-      );
+      const data = await getNeedsSuggestions('mainza-user');
 
       setMainzaState(prev => ({
         ...prev,

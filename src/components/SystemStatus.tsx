@@ -17,7 +17,7 @@ import { GlassCard } from '@/components/ui/glass-card';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { cn } from '@/lib/utils';
 import { hasWindowOpenAI } from '@/lib/windowOpenAI';
-import { fetchJsonWithRetry, fetchWithRetry } from '@/lib/cloudApi';
+import { getSystemHealthSnapshot } from '@/lib/cloudModules';
 
 interface SystemHealth {
   backend_status: 'healthy' | 'degraded' | 'down';
@@ -65,27 +65,21 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({
       // Test multiple endpoints to get real system status
       const startTime = Date.now();
       
-      const healthPromises = [
-        fetchWithRetry('/health', undefined, { timeoutMs: 6000 }).then(r => ({ ok: r.ok })).catch(() => ({ ok: false })),
-        fetchJsonWithRetry<any>('/consciousness/state', undefined, { timeoutMs: 7000 }).then(data => ({ ok: true, data })).catch(() => ({ ok: false, data: null })),
-        fetchWithRetry('/api/memory-system/health', undefined, { timeoutMs: 7000 }).then(r => ({ ok: r.ok })).catch(() => ({ ok: false }))
-      ];
+      const snapshot = await getSystemHealthSnapshot();
 
-      const [healthResult, consciousnessResult, agentResult] = await Promise.all(healthPromises);
-      
       // Calculate real response time
       const responseTime = Date.now() - startTime;
       
       // Determine actual system status based on API responses
-      const backendStatus = healthResult.ok ? 'healthy' : 'degraded';
-      const consciousnessStatus = consciousnessResult.ok ? 'active' : 'inactive';
-      const agentSystemStatus = (agentResult.ok && hasWindowOpenAI()) ? 'operational' : 'degraded';
+      const backendStatus = snapshot.backendOk ? 'healthy' : 'degraded';
+      const consciousnessStatus = snapshot.consciousnessOk ? 'active' : 'inactive';
+      const agentSystemStatus = (snapshot.memorySystemOk && hasWindowOpenAI()) ? 'operational' : 'degraded';
       
       // Neo4j/memory status based on dedicated cloud memory endpoint
-      const neo4jStatus = agentResult.ok ? 'connected' : 'disconnected';
+      const neo4jStatus = snapshot.memorySystemOk ? 'connected' : 'disconnected';
       
       // Estimate uptime based on consciousness data or use reasonable default
-      const consciousnessData = consciousnessResult.data;
+      const consciousnessData = snapshot.consciousnessData;
       const uptimeString = consciousnessData?.consciousness_state?.last_updated ? 
         calculateUptime(consciousnessData.consciousness_state.last_updated) : '2h 15m';
       
