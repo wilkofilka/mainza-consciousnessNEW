@@ -74,6 +74,7 @@ python test_ai_consciousness_optimizations.py
 - [🧠 Consciousness Framework](docs/CONSCIOUSNESS_FRAMEWORK.md) - 5-phase consciousness evolution
 - [📡 API Reference](docs/API_REFERENCE.md) - Complete API documentation
 - [📊 Performance Metrics](docs/PERFORMANCE_METRICS.md) - System performance monitoring
+- [🔐 Google OAuth Setup](docs/GOOGLE_OAUTH_SETUP.md) - Frontend Google sign-in configuration
 - [🤝 Contributing](docs/CONTRIBUTING.md) - Development guidelines
 
 ## 🤝 **Contributing**
