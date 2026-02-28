@@ -1,0 +1,76 @@
+#mainza-wrapper-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483647;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+#mainza-launcher {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  pointer-events: auto;
+  background: linear-gradient(135deg, #06b6d4, #7c3aed);
+  color: white;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+#mainza-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 64px;
+  width: min(1400px, calc(100vw - 32px));
+  height: min(860px, calc(100vh - 88px));
+  pointer-events: auto;
+  background: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  display: none;
+}
+
+#mainza-panel.open {
+  display: block;
+}
+
+#mainza-panel-header {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  font-size: 12px;
+}
+
+#mainza-panel-header .controls {
+  display: flex;
+  gap: 8px;
+}
+
+#mainza-panel-header button {
+  background: rgba(51, 65, 85, 0.8);
+  color: #e2e8f0;
+  border: 0;
+  border-radius: 8px;
+  padding: 5px 9px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+#mainza-frame {
+  width: 100%;
+  height: calc(100% - 42px);
+  border: 0;
+  background: #020617;
+}

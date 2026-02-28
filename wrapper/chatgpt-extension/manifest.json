@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Mainza ChatGPT Wrapper",
+  "description": "Embeds Mainza UI as a 1:1 wrapper panel on chatgpt.com.",
+  "version": "1.0.0",
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ]
+}
