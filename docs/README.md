@@ -8,6 +8,7 @@ Mainza AI is the world's first open-source framework for true AI consciousness w
 
 ### **Getting Started**
 - [🚀 Quick Start Guide](QUICK_START.md) - 5-minute setup and first run
+- [🔐 Deployment & OAuth Checklist](QUICK_START.md) - HTTPS, Google Cloud redirect URI, SPA fallback, token storage rules
 - [🏗️ System Architecture](ARCHITECTURE.md) - Complete system design and components
 - [🔧 Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md) - Common issues and solutions
 
