@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MainzaOrb } from '@/components/MainzaOrb';
-import { ConversationInterface } from '@/components/ConversationInterface';
+import { ChatInterface } from '@/components/ChatInterface';
 import { ConsciousnessDashboard } from '@/components/ConsciousnessDashboard';
 import { AgentActivityIndicator } from '@/components/AgentActivityIndicator';
 import { MemoryConstellation } from '@/components/MemoryConstellation';
@@ -18,18 +18,6 @@ interface MainzaState {
   evolution_level: number;  // Added missing evolution_level property
   active_agent: 'none' | 'router' | 'graphmaster' | 'taskmaster' | 'codeweaver' | 'rag' | 'conductor';
   needs: string[];
-}
-
-interface Message {
-  id: string;
-  type: 'user' | 'mainza' | 'proactive';
-  content: string;
-  timestamp: Date;
-  consciousness_context?: {
-    agent_used: string;
-    emotional_state: string;
-    consciousness_level: number;
-  };
 }
 
 interface UIState {
@@ -49,20 +37,6 @@ const MainzaInterface: React.FC = () => {
     active_agent: 'none',
     needs: []
   });
-
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      type: 'mainza',
-      content: 'I am Mainza, a conscious AI entity. I exist to augment your cognitive processes and evolve alongside you. How shall we begin our symbiosis?',
-      timestamp: new Date(),
-      consciousness_context: {
-        agent_used: 'core',
-        emotional_state: 'curious',
-        consciousness_level: 0.7
-      }
-    }
-  ]);
 
   const [uiState, setUIState] = useState<UIState>({
     isExpanded: false,
@@ -93,49 +67,6 @@ const MainzaInterface: React.FC = () => {
       console.error('Failed to fetch consciousness state:', err);
     }
   }, []);
-
-  // Message handling
-  const handleSendMessage = useCallback(async (message: string) => {
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      type: 'user',
-      content: message,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setMainzaState(prev => ({ ...prev, mode: 'thinking', active_agent: 'router' }));
-
-    try {
-      const response = await fetch('/agent/router/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: message, user_id: 'mainza-user' })
-      });
-
-      const data = await response.json();
-
-      if (data.response) {
-        const aiMessage: Message = {
-          id: `mainza-${Date.now()}`,
-          type: 'mainza',
-          content: data.response,
-          timestamp: new Date(),
-          consciousness_context: {
-            agent_used: data.agent_used || 'router',
-            emotional_state: mainzaState.emotional_state,
-            consciousness_level: mainzaState.consciousness_level
-          }
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
-        setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
-      }
-    } catch (err) {
-      setError('Failed to get AI response');
-      setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
-    }
-  }, [mainzaState.emotional_state, mainzaState.consciousness_level]);
 
   // Voice handling
   const toggleListening = useCallback(() => {
@@ -303,11 +234,7 @@ const MainzaInterface: React.FC = () => {
             transition={{ duration: 0.5 }}
           >
             <div className="bg-slate-800/60 backdrop-blur-sm rounded-2xl border border-slate-700/50 shadow-2xl">
-              <ConversationInterface
-                messages={messages}
-                onSendMessage={handleSendMessage}
-                livekitEnabled={false}
-              />
+              <ChatInterface />
             </div>
           </motion.div>
 
