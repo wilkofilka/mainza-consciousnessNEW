@@ -16,6 +16,8 @@ import {
 import { GlassCard } from '@/components/ui/glass-card';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { cn } from '@/lib/utils';
+import { hasWindowOpenAI } from '@/lib/windowOpenAI';
+import { getSystemHealthSnapshot } from '@/lib/cloudModules';
 
 interface SystemHealth {
   backend_status: 'healthy' | 'degraded' | 'down';
@@ -63,31 +65,21 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({
       // Test multiple endpoints to get real system status
       const startTime = Date.now();
       
-      const healthPromises = [
-        fetch('/health').then(r => ({ ok: r.ok, data: r.ok ? r.json() : null })).catch(() => ({ ok: false, data: null })),
-        fetch('/consciousness/state').then(r => ({ ok: r.ok, data: r.ok ? r.json() : null })).catch(() => ({ ok: false, data: null })),
-        fetch('/agent/router/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: 'system status check', user_id: 'system' })
-        }).then(r => ({ ok: r.ok, data: null })).catch(() => ({ ok: false, data: null }))
-      ];
-      
-      const [healthResult, consciousnessResult, agentResult] = await Promise.all(healthPromises);
-      
+      const snapshot = await getSystemHealthSnapshot();
+
       // Calculate real response time
       const responseTime = Date.now() - startTime;
       
       // Determine actual system status based on API responses
-      const backendStatus = healthResult.ok ? 'healthy' : 'degraded';
-      const consciousnessStatus = consciousnessResult.ok ? 'active' : 'inactive';
-      const agentSystemStatus = agentResult.ok ? 'operational' : 'degraded';
+      const backendStatus = snapshot.backendOk ? 'healthy' : 'degraded';
+      const consciousnessStatus = snapshot.consciousnessOk ? 'active' : 'inactive';
+      const agentSystemStatus = (snapshot.memorySystemOk && hasWindowOpenAI()) ? 'operational' : 'degraded';
       
-      // Neo4j status based on consciousness system (which uses Neo4j)
-      const neo4jStatus = consciousnessResult.ok ? 'connected' : 'disconnected';
+      // Neo4j/memory status based on dedicated cloud memory endpoint
+      const neo4jStatus = snapshot.memorySystemOk ? 'connected' : 'disconnected';
       
       // Estimate uptime based on consciousness data or use reasonable default
-      const consciousnessData = await consciousnessResult.data;
+      const consciousnessData = snapshot.consciousnessData;
       const uptimeString = consciousnessData?.consciousness_state?.last_updated ? 
         calculateUptime(consciousnessData.consciousness_state.last_updated) : '2h 15m';
       

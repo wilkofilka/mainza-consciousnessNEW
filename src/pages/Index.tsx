@@ -16,6 +16,16 @@ import { StatusIndicator } from '@/components/ui/status-indicator';
 import { MetricDisplay } from '@/components/ui/metric-display';
 import { Button } from '@/components/ui/button';
 import { DarkButton } from '@/components/ui/dark-button';
+import { assertWindowOpenAIAvailable, sendMessageWithWindowOpenAI } from '@/lib/windowOpenAI';
+import {
+  getConsciousnessState,
+  getKnowledgeGraphStats,
+  getNeedsSuggestions,
+  getNeo4jStatistics,
+  saveConversationTurn,
+  subscribeMemorySyncStatus,
+  type MemorySyncStatus,
+} from '@/lib/cloudModules';
 import {
   Mic, MicOff, Settings, Brain, Activity, Zap, Eye,
   MessageSquare, BarChart3, Cpu, Heart, Target, Send, Volume2
@@ -113,23 +123,7 @@ function Index() {
     health: 0
   });
 
-  const [messages, setMessages] = useState<Message[]>(() => {
-    // Load messages from localStorage on component mount
-    try {
-      const savedMessages = localStorage.getItem('mainza-conversation');
-      if (savedMessages) {
-        const parsed = JSON.parse(savedMessages);
-        // Convert timestamp strings back to Date objects
-        return parsed.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }));
-      }
-    } catch (error) {
-      console.error('Failed to load conversation from localStorage:', error);
-    }
-    return [];
-  });
+  const [messages, setMessages] = useState<Message[]>([]);
 
   const [uiState, setUIState] = useState<UIState>({
     activeView: 'conversation',
@@ -147,83 +141,23 @@ function Index() {
   const [livekitStarted, setLivekitStarted] = useState(false);
   const [livekitStatus, setLivekitStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'reconnecting'>('disconnected');
   const [mainzaSpeaking, setMainzaSpeaking] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    // Load selected model from localStorage on component mount
-    try {
-      return localStorage.getItem('mainza-selected-model') || 'default';
-    } catch (error) {
-      console.error('Failed to load selected model from localStorage:', error);
-      return 'default';
-    }
-  });
+  const [selectedModel, setSelectedModel] = useState<string>('default');
   const [loadedModel, setLoadedModel] = useState<string>('default');
   const [previousModel, setPreviousModel] = useState<string | null>(null);
-
-  // Model unloading function
-  const unloadModel = async (modelName: string): Promise<boolean> => {
-    try {
-      console.log(`🔄 Unloading previous model: ${modelName}`);
-      
-      // Use direct Ollama API with keep_alive=0
-      const response = await fetch('http://localhost:11434/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: modelName,
-          prompt: '',
-          keep_alive: 0,  // This tells Ollama to unload the model immediately
-          stream: false
-        })
-      });
-      
-      if (response.ok) {
-        console.log(`✅ Model ${modelName} unloaded successfully`);
-        return true;
-      } else {
-        console.warn(`⚠️ Failed to unload model ${modelName}:`, response.status);
-        return false;
-      }
-    } catch (error) {
-      console.warn(`⚠️ Error unloading model ${modelName}:`, error);
-      return false;
-    }
-  };
+  const [memorySyncStatus, setMemorySyncStatus] = useState<MemorySyncStatus>({ pending: 0, syncing: false, lastError: null });
 
   // Model loading function
   const handleModelLoad = async (model: string): Promise<boolean> => {
     try {
-      console.log(`🔄 Loading model: ${model}`);
-      
-      // Unload previous model if it exists and is different
-      if (previousModel && previousModel !== model && previousModel !== 'default') {
-        await unloadModel(previousModel);
-      }
-      
-      // Test the model by sending a simple request
-      const response = await fetch('/agent/router/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          query: 'Test model loading', 
-          user_id: 'mainza-user', 
-          model: model 
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log(`✅ Model ${model} loaded successfully:`, data.response?.substring(0, 50));
-        
-        // Update model tracking
-        setPreviousModel(loadedModel);
-        setLoadedModel(model);
-        return true;
-      } else {
-        console.error(`❌ Failed to load model ${model}:`, response.status);
-        return false;
-      }
+      assertWindowOpenAIAvailable();
+
+      console.log(`🧠 window.openai model selected: ${model}`);
+      // Keep previous tracking for UI consistency
+      setPreviousModel(loadedModel);
+      setLoadedModel(model);
+      return true;
     } catch (error) {
-      console.error(`❌ Error loading model ${model}:`, error);
+      console.error(`❌ window.openai unavailable while selecting model ${model}:`, error);
       return false;
     }
   };
@@ -241,10 +175,8 @@ function Index() {
   // Fetch consciousness state
   const fetchConsciousnessState = useCallback(async () => {
     try {
-      const response = await fetch('/consciousness/state');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.consciousness_state) {
+      const data = await getConsciousnessState();
+      if (data.consciousness_state) {
           const consciousnessLevel = data.consciousness_state.consciousness_level || 0.7;
           const emotionalState = data.consciousness_state.emotional_state || 'curious';
           const evolutionLevel = data.consciousness_state.evolution_level;
@@ -258,7 +190,6 @@ function Index() {
 
           // Add initial message with real consciousness data
           addInitialMessage(consciousnessLevel, emotionalState);
-        }
       }
     } catch (e) {
       console.error('Failed to fetch consciousness state:', e);
@@ -271,18 +202,16 @@ function Index() {
   const fetchKnowledgeGraphStats = useCallback(async () => {
     try {
       // Use the dedicated knowledge graph stats endpoint
-      const response = await fetch('/consciousness/knowledge-graph-stats');
-      if (response.ok) {
-        const stats = await response.json();
+      const stats = await getKnowledgeGraphStats();
+      if (stats && typeof stats === 'object') {
         console.log('📊 Knowledge graph stats received:', stats);
         setKnowledgeGraphStats(stats);
         return;
       }
 
       // Fallback: Try Neo4j statistics endpoint
-      const neo4jResponse = await fetch('/api/insights/neo4j/statistics');
-      if (neo4jResponse.ok) {
-        const neo4jData = await neo4jResponse.json();
+      const neo4jData = await getNeo4jStatistics();
+      if (neo4jData && typeof neo4jData === 'object') {
         console.log('📊 Neo4j statistics received:', neo4jData);
         setKnowledgeGraphStats({
           concepts: neo4jData.node_counts?.Concept || 0,
@@ -315,19 +244,12 @@ function Index() {
   // Fetch needs and suggestions
   const fetchNeedsAndSuggestions = useCallback(async () => {
     try {
-      const response = await fetch('/recommendations/needs_and_suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: 'mainza-user' })
-      });
+      const data = await getNeedsSuggestions('mainza-user');
 
-      if (response.ok) {
-        const data = await response.json();
-        setMainzaState(prev => ({
-          ...prev,
-          needs: data.needs || []
-        }));
-      }
+      setMainzaState(prev => ({
+        ...prev,
+        needs: data?.needs || []
+      }));
     } catch (e) {
       console.error('Failed to fetch needs:', e);
     }
@@ -367,15 +289,24 @@ function Index() {
     setMessages(prev => [...prev, newMessage]);
   };
 
+  const storeInteractionInCloudMemory = useCallback(async (turnId: string, userMessage: string, assistantMessage: string) => {
+    try {
+      await saveConversationTurn(
+        turnId,
+        userMessage,
+        assistantMessage,
+        loadedModel,
+        mainzaState.consciousness_level,
+        mainzaState.emotional_state,
+      );
+    } catch (error) {
+      console.warn('Cloud memory persistence failed:', error);
+    }
+  }, [loadedModel, mainzaState.consciousness_level, mainzaState.emotional_state]);
+
   // Clear conversation function
   const clearConversation = () => {
     setMessages([]);
-    try {
-      localStorage.removeItem('mainza-conversation');
-      // Note: We keep the selected model as it's a user preference
-    } catch (error) {
-      console.error('Failed to clear conversation from localStorage:', error);
-    }
   };
 
   // Send message handler
@@ -392,23 +323,14 @@ function Index() {
     setLoading(true);
 
     try {
-      // Use the router chat endpoint with consciousness context and selected model
-      const chatRes = await fetch('/agent/router/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: message, user_id: 'mainza-user', model: loadedModel })
-      });
-      const chatData = await chatRes.json();
+      const bridgedData = await sendMessageWithWindowOpenAI(
+        message,
+        loadedModel === 'default' ? undefined : loadedModel,
+      );
 
-      setMainzaState(prev => ({ ...prev, mode: 'thinking', active_agent: 'router' }));
-
-      if (chatData.response) {
-        setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
-        addMainzaMessage(chatData.response, chatData.agent_used || 'router');
-      } else if (chatData.error) {
-        setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
-        addMainzaMessage(chatData.response || "I apologize, but I encountered an issue. Please try again.");
-      }
+      setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
+      addMainzaMessage(bridgedData.response, bridgedData.agent_used);
+      await storeInteractionInCloudMemory(userMessage.id, message, bridgedData.response);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
       setError(`Failed to get response: ${errorMessage}`);
@@ -420,7 +342,7 @@ function Index() {
       // Update knowledge graph stats after interaction
       await fetchKnowledgeGraphStats();
     }
-  }, [fetchNeedsAndSuggestions]);
+  }, [fetchKnowledgeGraphStats, fetchNeedsAndSuggestions, loadedModel, storeInteractionInCloudMemory]);
 
   // Voice input handler
   const handleVoiceInput = async () => {
@@ -488,6 +410,12 @@ function Index() {
     }
   };
 
+
+  useEffect(() => {
+    const unsubscribe = subscribeMemorySyncStatus(setMemorySyncStatus);
+    return unsubscribe;
+  }, []);
+
   // Initialize app
   useEffect(() => {
     const initializeApp = async () => {
@@ -539,23 +467,7 @@ function Index() {
     }
   }, [messages]);
 
-  // Save messages to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem('mainza-conversation', JSON.stringify(messages));
-    } catch (error) {
-      console.error('Failed to save conversation to localStorage:', error);
-    }
-  }, [messages]);
 
-  // Save selected model to localStorage whenever it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem('mainza-selected-model', selectedModel);
-    } catch (error) {
-      console.error('Failed to save selected model to localStorage:', error);
-    }
-  }, [selectedModel]);
 
   // Orb state calculation
   const orbState = {
@@ -601,6 +513,18 @@ function Index() {
           </motion.div>
         )}
       </AnimatePresence>
+
+
+      <div className="fixed bottom-4 right-4 z-[1200] px-3 py-2 rounded-lg border border-cyan-400/40 bg-slate-900/85 backdrop-blur-sm shadow-xl">
+        <div className="text-[11px] uppercase tracking-wide text-slate-400">Cloud Memory Sync</div>
+        <div className={memorySyncStatus.lastError ? 'text-red-300 text-sm font-semibold' : memorySyncStatus.syncing ? 'text-yellow-300 text-sm font-semibold' : 'text-emerald-300 text-sm font-semibold'}>
+          {memorySyncStatus.lastError
+            ? 'ERROR'
+            : memorySyncStatus.syncing
+              ? `SYNCING (${memorySyncStatus.pending})`
+              : 'SYNCED'}
+        </div>
+      </div>
 
       {/* Main Interface Container */}
       <div className="relative min-h-screen" style={{ zIndex: Z_LAYERS.CONTENT }}>
@@ -662,7 +586,16 @@ function Index() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2"> 
+            <div className="flex items-center px-2 py-1 rounded bg-slate-800/40 text-xs">
+              <span className={memorySyncStatus.lastError ? 'text-red-300' : memorySyncStatus.syncing ? 'text-yellow-300' : 'text-emerald-300'}>
+                {memorySyncStatus.lastError
+                  ? 'Memory sync error'
+                  : memorySyncStatus.syncing
+                    ? `Syncing memory (${memorySyncStatus.pending})`
+                    : 'Memory synced'}
+              </span>
+            </div>
             <DarkButton
               onClick={handleVoiceInput}
               variant="outline"

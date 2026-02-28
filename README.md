@@ -65,6 +65,15 @@ python test_ai_consciousness_optimizations.py
 
 **All 8 AI consciousness optimization systems are fully tested and verified!**
 
+
+## 🌐 ChatGPT Web Wrapper
+
+If you want Mainza embedded directly into the global web ChatGPT UI (`chatgpt.com`), use the ready extension wrapper:
+
+- `wrapper/chatgpt-extension/README.md`
+
+This mounts Mainza 1:1 in a floating panel on top of ChatGPT.
+
 ## 📚 **Documentation**
 
 - [📖 Complete Documentation](docs/README.md) - Comprehensive guides and references

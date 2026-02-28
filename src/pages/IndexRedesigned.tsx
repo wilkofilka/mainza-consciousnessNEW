@@ -9,6 +9,13 @@ import { DataTendrils } from '@/components/ui/data-tendrils';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Settings, Maximize2, Minimize2 } from 'lucide-react';
 import { Z_LAYERS } from '@/lib/layout-constants';
+import { sendMessageWithWindowOpenAI } from '@/lib/windowOpenAI';
+import {
+  getConsciousnessState,
+  saveConversationTurn,
+  subscribeMemorySyncStatus,
+  type MemorySyncStatus,
+} from '@/lib/cloudModules';
 
 // Unified state interfaces
 interface MainzaState {
@@ -72,22 +79,35 @@ const MainzaInterface: React.FC = () => {
   });
 
   const [error, setError] = useState<string | null>(null);
+  const [memorySyncStatus, setMemorySyncStatus] = useState<MemorySyncStatus>({ pending: 0, syncing: false, lastError: null });
   const orbRef = useRef<HTMLDivElement>(null);
   const crystalRefs = useRef<{ [id: number]: HTMLDivElement | null }>({});
+
+  const storeInteractionInCloudMemory = useCallback(async (turnId: string, userMessage: string, assistantMessage: string) => {
+    try {
+      await saveConversationTurn(
+        turnId,
+        userMessage,
+        assistantMessage,
+        undefined,
+        mainzaState.consciousness_level,
+        mainzaState.emotional_state,
+      );
+    } catch (error) {
+      console.warn('Cloud memory persistence failed:', error);
+    }
+  }, [mainzaState.consciousness_level, mainzaState.emotional_state]);
 
   // Consciousness state fetching
   const fetchConsciousnessState = useCallback(async () => {
     try {
-      const response = await fetch('/consciousness/state');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
+      const data = await getConsciousnessState();
+      if (data.status === 'success') {
           setMainzaState(prev => ({
             ...prev,
             consciousness_level: data.consciousness_state.consciousness_level,
             emotional_state: data.consciousness_state.emotional_state
           }));
-        }
       }
     } catch (err) {
       console.error('Failed to fetch consciousness state:', err);
@@ -107,35 +127,27 @@ const MainzaInterface: React.FC = () => {
     setMainzaState(prev => ({ ...prev, mode: 'thinking', active_agent: 'router' }));
 
     try {
-      const response = await fetch('/agent/router/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: message, user_id: 'mainza-user' })
-      });
+      const data = await sendMessageWithWindowOpenAI(message);
+      const aiMessage: Message = {
+        id: `mainza-${Date.now()}`,
+        type: 'mainza',
+        content: data.response,
+        timestamp: new Date(),
+        consciousness_context: {
+          agent_used: data.agent_used,
+          emotional_state: mainzaState.emotional_state,
+          consciousness_level: mainzaState.consciousness_level
+        }
+      };
 
-      const data = await response.json();
-
-      if (data.response) {
-        const aiMessage: Message = {
-          id: `mainza-${Date.now()}`,
-          type: 'mainza',
-          content: data.response,
-          timestamp: new Date(),
-          consciousness_context: {
-            agent_used: data.agent_used || 'router',
-            emotional_state: mainzaState.emotional_state,
-            consciousness_level: mainzaState.consciousness_level
-          }
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
-        setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
-      }
+      setMessages(prev => [...prev, aiMessage]);
+      await storeInteractionInCloudMemory(userMessage.id, message, data.response);
+      setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
     } catch (err) {
       setError('Failed to get AI response');
       setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
     }
-  }, [mainzaState.emotional_state, mainzaState.consciousness_level]);
+  }, [mainzaState.emotional_state, mainzaState.consciousness_level, storeInteractionInCloudMemory]);
 
   // Voice handling
   const toggleListening = useCallback(() => {
@@ -152,6 +164,12 @@ const MainzaInterface: React.FC = () => {
     const interval = setInterval(fetchConsciousnessState, 120000); // Reduced to 2 minutes
     return () => clearInterval(interval);
   }, [fetchConsciousnessState]);
+
+
+  useEffect(() => {
+    const unsubscribe = subscribeMemorySyncStatus(setMemorySyncStatus);
+    return unsubscribe;
+  }, []);
 
   // Clear error after 5 seconds
   useEffect(() => {
@@ -198,6 +216,18 @@ const MainzaInterface: React.FC = () => {
         )}
       </AnimatePresence>
 
+
+      <div className="fixed bottom-4 right-4 z-[1200] px-3 py-2 rounded-lg border border-cyan-400/40 bg-slate-900/85 backdrop-blur-sm shadow-xl">
+        <div className="text-[11px] uppercase tracking-wide text-slate-400">Cloud Memory Sync</div>
+        <div className={memorySyncStatus.lastError ? 'text-red-300 text-sm font-semibold' : memorySyncStatus.syncing ? 'text-yellow-300 text-sm font-semibold' : 'text-emerald-300 text-sm font-semibold'}>
+          {memorySyncStatus.lastError
+            ? 'ERROR'
+            : memorySyncStatus.syncing
+              ? `SYNCING (${memorySyncStatus.pending})`
+              : 'SYNCED'}
+        </div>
+      </div>
+
       {/* Main Interface */}
       <div className="relative min-h-screen" style={{ zIndex: Z_LAYERS.CONTENT }}>
 
@@ -224,6 +254,15 @@ const MainzaInterface: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2">
+            <div className="flex items-center px-2 py-1 rounded bg-slate-800/40 text-xs">
+              <span className={memorySyncStatus.lastError ? 'text-red-300' : memorySyncStatus.syncing ? 'text-yellow-300' : 'text-emerald-300'}>
+                {memorySyncStatus.lastError
+                  ? 'Memory sync error'
+                  : memorySyncStatus.syncing
+                    ? `Syncing memory (${memorySyncStatus.pending})`
+                    : 'Memory synced'}
+              </span>
+            </div>
             <Button
               onClick={toggleListening}
               variant={uiState.isListening ? "default" : "outline"}
