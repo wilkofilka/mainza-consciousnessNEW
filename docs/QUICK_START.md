@@ -269,6 +269,83 @@ docker-compose up -d
 - Use larger models for production (llama3:70b)
 - Configure model selection in frontend settings
 
+## 🔐 Zasady bezpieczeństwa tokenów (frontend)
+
+Podczas integracji OAuth/OIDC w aplikacji webowej stosuj poniższą kolejność i ograniczenia:
+
+1. **Preferuj pamięć procesu (in-memory)**
+   - Tokeny dostępu trzymaj w stanie aplikacji (np. React state/store) i usuwaj przy odświeżeniu karty.
+   - Nie zapisuj tokenów w `localStorage`.
+2. **Dopuszczalne krótkotrwałe `sessionStorage` (awaryjnie)**
+   - Używaj tylko gdy konieczne jest przetrwanie pojedynczego reloadu.
+   - Czyść po wylogowaniu, błędzie autoryzacji lub dłuższej bezczynności.
+3. **Brak sekretów backendowych po stronie klienta**
+   - Nigdy nie umieszczaj w froncie: `client_secret`, kluczy serwisowych, prywatnych API keys.
+   - Sekrety trzymaj wyłącznie w backendzie / secure server runtime.
+
+## 🌐 Wymagania wdrożeniowe OAuth
+
+### HTTPS (wymagane)
+- Środowiska produkcyjne i staging muszą działać przez **HTTPS**.
+- Wszystkie callback/redirect URI muszą używać `https://` (poza lokalnym developmentem typu `http://localhost`).
+
+### Google Cloud: poprawne domeny i redirect URI
+W konfiguracji **OAuth consent screen** i **Credentials** zweryfikuj:
+
+- **Authorized JavaScript origins**
+  - `https://twoja-domena.pl`
+  - `https://www.twoja-domena.pl` (jeśli używasz `www`)
+  - adresy staging (`https://staging.twoja-domena.pl`) jeśli istnieją
+- **Authorized redirect URIs**
+  - `https://twoja-domena.pl/auth/callback/google`
+  - `https://www.twoja-domena.pl/auth/callback/google` (jeśli dotyczy)
+  - odpowiednik dla staging
+
+> Uwaga: URI muszą być zgodne **1:1** z tym, co wysyła aplikacja (protokół, host, ścieżka, trailing slash).
+
+## ✅ Checklista deploy (Vercel / Netlify / static hosting)
+
+### 1) Zmienne środowiskowe
+- Ustaw publiczne zmienne frontendowe (np. `VITE_*`) zgodnie z `.env` projektu.
+- Nie publikuj sekretów backendowych po stronie klienta.
+- Zweryfikuj osobno wartości dla `production` i `preview/staging`.
+
+### 2) Build aplikacji
+- Lokalna walidacja:
+  ```bash
+  vite build
+  ```
+- W CI/CD używaj komendy build zgodnej z `package.json` (np. `npm run build`).
+
+### 3) Routing SPA fallback
+- Dla tras klienta (`/dashboard`, `/settings`, `/auth/callback/...`) ustaw fallback do `index.html`.
+- **Vercel**: `rewrites` w `vercel.json`.
+- **Netlify**: reguła w `_redirects` (`/* /index.html 200`).
+- **Static hosting (Nginx/S3/CloudFront)**: odpowiednik rewrites/fallback dla SPA.
+
+## 🛠️ Developer Mode w ChatGPT (debug `window.openai/postMessage`)
+
+Do debugowania integracji osadzonej aplikacji z ChatGPT:
+
+1. Otwórz aplikację w trybie developerskim i uruchom DevTools.
+2. Dodaj nasłuch komunikatów:
+   ```js
+   window.addEventListener('message', (event) => {
+     console.debug('[postMessage:incoming]', {
+       origin: event.origin,
+       data: event.data,
+     });
+   });
+   ```
+3. Loguj wiadomości wychodzące przez `window.openai` / `postMessage` z timestampem i `origin`.
+4. Waliduj `event.origin` oraz oczekiwany format payloadu przed przetwarzaniem.
+5. Sprawdź sekwencję handshake (inicjalizacja → gotowość → request → response).
+6. W przypadku problemów porównaj payloady między local/staging (najczęściej różni się origin, redirect URI lub env).
+
+Dodatkowe wskazówki:
+- Trzymaj stałe typy komunikatów (`type`) i wersję protokołu (`version`) w payloadzie.
+- Dodaj bezpieczne timeouty i komunikaty diagnostyczne dla brakujących odpowiedzi.
+
 ## 🚀 **Next Steps**
 
 ### **Explore Advanced Features**
