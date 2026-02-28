@@ -9,6 +9,7 @@ import { DataTendrils } from '@/components/ui/data-tendrils';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Settings, Maximize2, Minimize2 } from 'lucide-react';
 import { Z_LAYERS } from '@/lib/layout-constants';
+import { sendMessageWithWindowOpenAI } from '@/lib/windowOpenAI';
 
 // Unified state interfaces
 interface MainzaState {
@@ -75,6 +76,31 @@ const MainzaInterface: React.FC = () => {
   const orbRef = useRef<HTMLDivElement>(null);
   const crystalRefs = useRef<{ [id: number]: HTMLDivElement | null }>({});
 
+  const storeInteractionInCloudMemory = useCallback(async (userMessage: string, assistantMessage: string) => {
+    try {
+      await fetch('/api/memory-system/memories/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `User: ${userMessage}\nAssistant: ${assistantMessage}`,
+          memory_type: 'conversation',
+          user_id: 'mainza-user',
+          agent_name: 'window.openai',
+          consciousness_context: {
+            consciousness_level: mainzaState.consciousness_level,
+            emotional_state: mainzaState.emotional_state,
+          },
+          metadata: {
+            source: 'window.openai',
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      });
+    } catch (error) {
+      console.warn('Cloud memory persistence failed:', error);
+    }
+  }, [mainzaState.consciousness_level, mainzaState.emotional_state]);
+
   // Consciousness state fetching
   const fetchConsciousnessState = useCallback(async () => {
     try {
@@ -107,35 +133,27 @@ const MainzaInterface: React.FC = () => {
     setMainzaState(prev => ({ ...prev, mode: 'thinking', active_agent: 'router' }));
 
     try {
-      const response = await fetch('/agent/router/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: message, user_id: 'mainza-user' })
-      });
+      const data = await sendMessageWithWindowOpenAI(message);
+      const aiMessage: Message = {
+        id: `mainza-${Date.now()}`,
+        type: 'mainza',
+        content: data.response,
+        timestamp: new Date(),
+        consciousness_context: {
+          agent_used: data.agent_used,
+          emotional_state: mainzaState.emotional_state,
+          consciousness_level: mainzaState.consciousness_level
+        }
+      };
 
-      const data = await response.json();
-
-      if (data.response) {
-        const aiMessage: Message = {
-          id: `mainza-${Date.now()}`,
-          type: 'mainza',
-          content: data.response,
-          timestamp: new Date(),
-          consciousness_context: {
-            agent_used: data.agent_used || 'router',
-            emotional_state: mainzaState.emotional_state,
-            consciousness_level: mainzaState.consciousness_level
-          }
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
-        setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
-      }
+      setMessages(prev => [...prev, aiMessage]);
+      await storeInteractionInCloudMemory(message, data.response);
+      setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
     } catch (err) {
       setError('Failed to get AI response');
       setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
     }
-  }, [mainzaState.emotional_state, mainzaState.consciousness_level]);
+  }, [mainzaState.emotional_state, mainzaState.consciousness_level, storeInteractionInCloudMemory]);
 
   // Voice handling
   const toggleListening = useCallback(() => {
@@ -152,6 +170,7 @@ const MainzaInterface: React.FC = () => {
     const interval = setInterval(fetchConsciousnessState, 120000); // Reduced to 2 minutes
     return () => clearInterval(interval);
   }, [fetchConsciousnessState]);
+
 
   // Clear error after 5 seconds
   useEffect(() => {

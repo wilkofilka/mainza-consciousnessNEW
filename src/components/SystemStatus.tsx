@@ -16,6 +16,7 @@ import {
 import { GlassCard } from '@/components/ui/glass-card';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { cn } from '@/lib/utils';
+import { hasWindowOpenAI } from '@/lib/windowOpenAI';
 
 interface SystemHealth {
   backend_status: 'healthy' | 'degraded' | 'down';
@@ -66,11 +67,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({
       const healthPromises = [
         fetch('/health').then(r => ({ ok: r.ok, data: r.ok ? r.json() : null })).catch(() => ({ ok: false, data: null })),
         fetch('/consciousness/state').then(r => ({ ok: r.ok, data: r.ok ? r.json() : null })).catch(() => ({ ok: false, data: null })),
-        fetch('/agent/router/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: 'system status check', user_id: 'system' })
-        }).then(r => ({ ok: r.ok, data: null })).catch(() => ({ ok: false, data: null }))
+        fetch('/api/memory-system/health').then(r => ({ ok: r.ok, data: r.ok ? r.json() : null })).catch(() => ({ ok: false, data: null }))
       ];
       
       const [healthResult, consciousnessResult, agentResult] = await Promise.all(healthPromises);
@@ -81,10 +78,10 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({
       // Determine actual system status based on API responses
       const backendStatus = healthResult.ok ? 'healthy' : 'degraded';
       const consciousnessStatus = consciousnessResult.ok ? 'active' : 'inactive';
-      const agentSystemStatus = agentResult.ok ? 'operational' : 'degraded';
+      const agentSystemStatus = (agentResult.ok && hasWindowOpenAI()) ? 'operational' : 'degraded';
       
-      // Neo4j status based on consciousness system (which uses Neo4j)
-      const neo4jStatus = consciousnessResult.ok ? 'connected' : 'disconnected';
+      // Neo4j/memory status based on dedicated cloud memory endpoint
+      const neo4jStatus = agentResult.ok ? 'connected' : 'disconnected';
       
       // Estimate uptime based on consciousness data or use reasonable default
       const consciousnessData = await consciousnessResult.data;
