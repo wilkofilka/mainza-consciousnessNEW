@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Settings, User, Palette, Brain, MessageSquare, Monitor } from 'lucide-react';
 import UserPreferencesComponent from '@/components/UserPreferences';
+import LoginButton from '@/components/LoginButton';
 
 const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('preferences');
@@ -42,6 +43,8 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <LoginButton />
           </div>
         </div>
       </div>
