@@ -47,6 +47,7 @@
     "lint:ci": "eslint . --max-warnings 50 --rule '@typescript-eslint/no-explicit-any: warn' --rule 'no-empty: warn' --rule 'prefer-const: warn'"
   },
   "dependencies": {
+    "@openai/apps-sdk-ui": "latest",
     "@hookform/resolvers": "^3.9.0",
     "@livekit/components-react": "^2.9.12",
     "@livekit/components-styles": "^1.1.6",
