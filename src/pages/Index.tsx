@@ -17,6 +17,7 @@ import { MetricDisplay } from '@/components/ui/metric-display';
 import { Button } from '@/components/ui/button';
 import { DarkButton } from '@/components/ui/dark-button';
 import { assertWindowOpenAIAvailable, sendMessageWithWindowOpenAI } from '@/lib/windowOpenAI';
+import { fetchJsonWithRetry, persistConversationMemory } from '@/lib/cloudApi';
 import {
   Mic, MicOff, Settings, Brain, Activity, Zap, Eye,
   MessageSquare, BarChart3, Cpu, Heart, Target, Send, Volume2
@@ -165,10 +166,8 @@ function Index() {
   // Fetch consciousness state
   const fetchConsciousnessState = useCallback(async () => {
     try {
-      const response = await fetch('/consciousness/state');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.consciousness_state) {
+      const data = await fetchJsonWithRetry<any>('/consciousness/state', undefined, { timeoutMs: 7000 });
+      if (data.consciousness_state) {
           const consciousnessLevel = data.consciousness_state.consciousness_level || 0.7;
           const emotionalState = data.consciousness_state.emotional_state || 'curious';
           const evolutionLevel = data.consciousness_state.evolution_level;
@@ -182,7 +181,6 @@ function Index() {
 
           // Add initial message with real consciousness data
           addInitialMessage(consciousnessLevel, emotionalState);
-        }
       }
     } catch (e) {
       console.error('Failed to fetch consciousness state:', e);
@@ -195,18 +193,16 @@ function Index() {
   const fetchKnowledgeGraphStats = useCallback(async () => {
     try {
       // Use the dedicated knowledge graph stats endpoint
-      const response = await fetch('/consciousness/knowledge-graph-stats');
-      if (response.ok) {
-        const stats = await response.json();
+      const stats = await fetchJsonWithRetry<any>('/consciousness/knowledge-graph-stats', undefined, { timeoutMs: 7000 });
+      if (stats && typeof stats === 'object') {
         console.log('📊 Knowledge graph stats received:', stats);
         setKnowledgeGraphStats(stats);
         return;
       }
 
       // Fallback: Try Neo4j statistics endpoint
-      const neo4jResponse = await fetch('/api/insights/neo4j/statistics');
-      if (neo4jResponse.ok) {
-        const neo4jData = await neo4jResponse.json();
+      const neo4jData = await fetchJsonWithRetry<any>('/api/insights/neo4j/statistics', undefined, { timeoutMs: 7000 });
+      if (neo4jData && typeof neo4jData === 'object') {
         console.log('📊 Neo4j statistics received:', neo4jData);
         setKnowledgeGraphStats({
           concepts: neo4jData.node_counts?.Concept || 0,
@@ -239,19 +235,20 @@ function Index() {
   // Fetch needs and suggestions
   const fetchNeedsAndSuggestions = useCallback(async () => {
     try {
-      const response = await fetch('/recommendations/needs_and_suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: 'mainza-user' })
-      });
+      const data = await fetchJsonWithRetry<any>(
+        '/recommendations/needs_and_suggestions',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: 'mainza-user' })
+        },
+        { timeoutMs: 8000 },
+      );
 
-      if (response.ok) {
-        const data = await response.json();
-        setMainzaState(prev => ({
-          ...prev,
-          needs: data.needs || []
-        }));
-      }
+      setMainzaState(prev => ({
+        ...prev,
+        needs: data?.needs || []
+      }));
     } catch (e) {
       console.error('Failed to fetch needs:', e);
     }
@@ -293,24 +290,20 @@ function Index() {
 
   const storeInteractionInCloudMemory = useCallback(async (userMessage: string, assistantMessage: string) => {
     try {
-      await fetch('/api/memory-system/memories/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: `User: ${userMessage}\nAssistant: ${assistantMessage}`,
-          memory_type: 'conversation',
-          user_id: 'mainza-user',
-          agent_name: 'window.openai',
-          consciousness_context: {
-            consciousness_level: mainzaState.consciousness_level,
-            emotional_state: mainzaState.emotional_state,
-          },
-          metadata: {
-            source: 'window.openai',
-            selected_model: loadedModel,
-            timestamp: new Date().toISOString(),
-          },
-        }),
+      await persistConversationMemory({
+        content: `User: ${userMessage}\nAssistant: ${assistantMessage}`,
+        memory_type: 'conversation',
+        user_id: 'mainza-user',
+        agent_name: 'window.openai',
+        consciousness_context: {
+          consciousness_level: mainzaState.consciousness_level,
+          emotional_state: mainzaState.emotional_state,
+        },
+        metadata: {
+          source: 'window.openai',
+          selected_model: loadedModel,
+          timestamp: new Date().toISOString(),
+        },
       });
     } catch (error) {
       console.warn('Cloud memory persistence failed:', error);

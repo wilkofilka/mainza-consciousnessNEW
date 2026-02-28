@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Settings, Maximize2, Minimize2 } from 'lucide-react';
 import { Z_LAYERS } from '@/lib/layout-constants';
 import { sendMessageWithWindowOpenAI } from '@/lib/windowOpenAI';
+import { fetchJsonWithRetry, persistConversationMemory } from '@/lib/cloudApi';
 
 // Unified state interfaces
 interface MainzaState {
@@ -78,23 +79,19 @@ const MainzaInterface: React.FC = () => {
 
   const storeInteractionInCloudMemory = useCallback(async (userMessage: string, assistantMessage: string) => {
     try {
-      await fetch('/api/memory-system/memories/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: `User: ${userMessage}\nAssistant: ${assistantMessage}`,
-          memory_type: 'conversation',
-          user_id: 'mainza-user',
-          agent_name: 'window.openai',
-          consciousness_context: {
-            consciousness_level: mainzaState.consciousness_level,
-            emotional_state: mainzaState.emotional_state,
-          },
-          metadata: {
-            source: 'window.openai',
-            timestamp: new Date().toISOString(),
-          },
-        }),
+      await persistConversationMemory({
+        content: `User: ${userMessage}\nAssistant: ${assistantMessage}`,
+        memory_type: 'conversation',
+        user_id: 'mainza-user',
+        agent_name: 'window.openai',
+        consciousness_context: {
+          consciousness_level: mainzaState.consciousness_level,
+          emotional_state: mainzaState.emotional_state,
+        },
+        metadata: {
+          source: 'window.openai',
+          timestamp: new Date().toISOString(),
+        },
       });
     } catch (error) {
       console.warn('Cloud memory persistence failed:', error);
@@ -104,16 +101,13 @@ const MainzaInterface: React.FC = () => {
   // Consciousness state fetching
   const fetchConsciousnessState = useCallback(async () => {
     try {
-      const response = await fetch('/consciousness/state');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
+      const data = await fetchJsonWithRetry<any>('/consciousness/state', undefined, { timeoutMs: 7000 });
+      if (data.status === 'success') {
           setMainzaState(prev => ({
             ...prev,
             consciousness_level: data.consciousness_state.consciousness_level,
             emotional_state: data.consciousness_state.emotional_state
           }));
-        }
       }
     } catch (err) {
       console.error('Failed to fetch consciousness state:', err);

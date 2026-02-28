@@ -17,6 +17,7 @@ import { GlassCard } from '@/components/ui/glass-card';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { cn } from '@/lib/utils';
 import { hasWindowOpenAI } from '@/lib/windowOpenAI';
+import { fetchJsonWithRetry, fetchWithRetry } from '@/lib/cloudApi';
 
 interface SystemHealth {
   backend_status: 'healthy' | 'degraded' | 'down';
@@ -65,11 +66,11 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({
       const startTime = Date.now();
       
       const healthPromises = [
-        fetch('/health').then(r => ({ ok: r.ok, data: r.ok ? r.json() : null })).catch(() => ({ ok: false, data: null })),
-        fetch('/consciousness/state').then(r => ({ ok: r.ok, data: r.ok ? r.json() : null })).catch(() => ({ ok: false, data: null })),
-        fetch('/api/memory-system/health').then(r => ({ ok: r.ok, data: r.ok ? r.json() : null })).catch(() => ({ ok: false, data: null }))
+        fetchWithRetry('/health', undefined, { timeoutMs: 6000 }).then(r => ({ ok: r.ok })).catch(() => ({ ok: false })),
+        fetchJsonWithRetry<any>('/consciousness/state', undefined, { timeoutMs: 7000 }).then(data => ({ ok: true, data })).catch(() => ({ ok: false, data: null })),
+        fetchWithRetry('/api/memory-system/health', undefined, { timeoutMs: 7000 }).then(r => ({ ok: r.ok })).catch(() => ({ ok: false }))
       ];
-      
+
       const [healthResult, consciousnessResult, agentResult] = await Promise.all(healthPromises);
       
       // Calculate real response time
@@ -84,7 +85,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({
       const neo4jStatus = agentResult.ok ? 'connected' : 'disconnected';
       
       // Estimate uptime based on consciousness data or use reasonable default
-      const consciousnessData = await consciousnessResult.data;
+      const consciousnessData = consciousnessResult.data;
       const uptimeString = consciousnessData?.consciousness_state?.last_updated ? 
         calculateUptime(consciousnessData.consciousness_state.last_updated) : '2h 15m';
       
