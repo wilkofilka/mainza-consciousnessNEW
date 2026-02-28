@@ -216,6 +216,18 @@ const MainzaInterface: React.FC = () => {
         )}
       </AnimatePresence>
 
+
+      <div className="fixed bottom-4 right-4 z-[1200] px-3 py-2 rounded-lg border border-cyan-400/40 bg-slate-900/85 backdrop-blur-sm shadow-xl">
+        <div className="text-[11px] uppercase tracking-wide text-slate-400">Cloud Memory Sync</div>
+        <div className={memorySyncStatus.lastError ? 'text-red-300 text-sm font-semibold' : memorySyncStatus.syncing ? 'text-yellow-300 text-sm font-semibold' : 'text-emerald-300 text-sm font-semibold'}>
+          {memorySyncStatus.lastError
+            ? 'ERROR'
+            : memorySyncStatus.syncing
+              ? `SYNCING (${memorySyncStatus.pending})`
+              : 'SYNCED'}
+        </div>
+      </div>
+
       {/* Main Interface */}
       <div className="relative min-h-screen" style={{ zIndex: Z_LAYERS.CONTENT }}>
 
@@ -242,7 +254,7 @@ const MainzaInterface: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2">
-            <div className="hidden md:flex items-center px-2 py-1 rounded bg-slate-800/40 text-xs">
+            <div className="flex items-center px-2 py-1 rounded bg-slate-800/40 text-xs">
               <span className={memorySyncStatus.lastError ? 'text-red-300' : memorySyncStatus.syncing ? 'text-yellow-300' : 'text-emerald-300'}>
                 {memorySyncStatus.lastError
                   ? 'Memory sync error'
