@@ -125,6 +125,7 @@ cd mainza-consciousness
 - [API Reference](API_REFERENCE.md) - Complete API documentation with examples
 
 ### **Development Documentation**
+- [🧪 E2E i testy manualne](E2E_MANUAL_TEST_SCENARIOS.md) - Scenariusze logowania i czatu
 - [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
 - [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md) - Common issues and solutions
 - [Performance Metrics](PERFORMANCE_METRICS.md) - System performance monitoring
