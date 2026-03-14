@@ -1,9 +1,10 @@
 import React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Upload, Volume2, Loader2, MicOff, Sparkles, Cpu, Brain, Heart, MessageSquare } from 'lucide-react';
+import { Send, Mic, Upload, Volume2, Loader2, MicOff, Sparkles, Cpu, Brain, Heart, MessageSquare, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DarkButton } from '@/components/ui/dark-button';
 import { cn } from '@/lib/utils';
+import { buildArchitectureMirrorPrompt } from '@/lib/architecture-context';
 import { FixedSizeList as List } from 'react-window';
 
 export type TTSState = 'not_requested' | 'pending' | 'playing' | 'played' | 'error';
@@ -70,11 +71,24 @@ function ChatInput({ onSendMessage }: { onSendMessage: (msg: string) => void }) 
       }}
     >
       <div className="flex-1">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setInput(buildArchitectureMirrorPrompt(input))}
+            className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300 hover:bg-cyan-500/20 transition-colors"
+            title="Wstaw prompt odtwarzający architekturę Mainza"
+          >
+            <Network className="h-3.5 w-3.5" />
+            Użyj architektury Mainza
+          </button>
+          <span className="text-[11px] text-slate-400">Widget ChatGPT w trybie mirror</span>
+        </div>
+
         <input
           className="w-full rounded-lg px-4 py-3 bg-slate-900/80 text-slate-100 border border-slate-600/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors placeholder-slate-400"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Type your message..."
+          placeholder="Type your message or use architecture mirror..."
           aria-label="Type your message"
           disabled={isListening}
         />
